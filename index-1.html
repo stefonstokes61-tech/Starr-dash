@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#080b22">
+<meta name="description" content="Star Dash — dodge asteroids, collect stars, and beat your high score.">
+<title>Star Dash</title>
+<style>
+:root{color-scheme:dark;--bg:#080b22;--panel:#11183b;--cyan:#6cf7ff;--gold:#ffd85a;--pink:#ff5dca}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#18275a 0,#080b22 58%);color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh;display:flex;justify-content:center}
+main{width:min(100%,620px);padding:16px 14px 24px;display:flex;flex-direction:column;gap:12px}
+header{display:flex;justify-content:space-between;align-items:center;gap:10px}
+h1{font-size:clamp(24px,6vw,34px);margin:0;letter-spacing:1px;color:var(--cyan);text-shadow:0 0 18px #28b9ff}
+.subtitle{font-size:12px;color:#aebce8}
+.pill{border:1px solid #344477;background:#10183a;border-radius:99px;padding:7px 10px;font-size:12px;white-space:nowrap}
+.hud{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:#10183ad9;border:1px solid #29396b;border-radius:12px;padding:9px;text-align:center}
+.stat small{display:block;color:#aebce8;font-size:11px}.stat strong{font-size:20px}
+.gamewrap{position:relative;border:1px solid #344477;border-radius:18px;overflow:hidden;box-shadow:0 14px 42px #0008;background:#06091c}
+canvas{display:block;width:100%;height:auto;aspect-ratio: 3 / 4;touch-action:none}
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:22px;background:#05081acc;backdrop-filter:blur(4px)}
+.overlay.hidden{display:none}.modal{max-width:330px}.modal h2{color:var(--gold);font-size:28px;margin:0 0 8px}.modal p{color:#d1dcff;line-height:1.45;font-size:14px}
+button{font:inherit;color:#071022;font-weight:800;border:0;border-radius:12px;padding:12px 16px;background:linear-gradient(135deg,var(--cyan),#83a5ff);cursor:pointer;box-shadow:0 4px 0 #28608b;touch-action:manipulation}
+button:active{transform:translateY(2px);box-shadow:0 2px 0 #28608b}button.secondary{background:#1b2755;color:white;border:1px solid #41538d;box-shadow:none}
+.actions{display:flex;flex-wrap:wrap;gap:9px;justify-content:center}
+.controls{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.controls button{font-size:22px;padding:12px;user-select:none}
+.note{font-size:12px;line-height:1.5;color:#aebce8;text-align:center}
+section{background:#10183ad9;border:1px solid #29396b;border-radius:14px;padding:13px}
+section h3{margin:0 0 7px;color:var(--cyan);font-size:15px}
+.shoprow{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13px}
+.shoprow p{margin:4px 0;color:#b9c7f1}
+.shoprow button{padding:9px 11px;font-size:12px;flex-shrink:0}
+footer{text-align:center;color:#7182b7;font-size:11px}
+@media(min-width:560px){main{padding-top:24px}.gamewrap{max-height:72vh}canvas{max-height:72vh;aspect-ratio:3/4}}
+</style>
+</head>
+<body>
+<main>
+<header><div><h1>✦ STAR DASH</h1><div class="subtitle">A tiny cosmic arcade adventure</div></div><div class="pill">BEST: <b id="bestTop">0</b></div></header>
+<div class="hud">
+  <div class="stat"><small>SCORE</small><strong id="score">0</strong></div>
+  <div class="stat"><small>STARS</small><strong id="stars">0</strong></div>
+  <div class="stat"><small>SHIELD</small><strong id="shield">1</strong></div>
+</div>
+<div class="gamewrap">
+<canvas id="game" width="360" height="480" aria-label="Star Dash game play area"></canvas>
+<div class="overlay" id="overlay"><div class="modal"><h2 id="overlayTitle">Ready, Pilot?</h2><p id="overlayText">Steer your ship, collect glowing stars, and avoid the asteroids. How long can you last?</p><div class="actions"><button id="startBtn">START GAME</button></div></div></div>
+</div>
+<div class="controls" aria-label="Touch controls">
+<button class="secondary" id="leftBtn" aria-label="Move left">◀</button>
+<button class="secondary" id="downBtn" aria-label="Move down">▼</button>
+<button class="secondary" id="rightBtn" aria-label="Move right">▶</button>
+</div>
+<div class="note">Touch the controls or use ← → and ↓ on your keyboard. On desktop, ↑ also moves up.</div>
+<section><h3>🚀 Pilot Hangar</h3><div class="shoprow"><div><b>Extra Shield</b><p>Prototype shop item. Real payments are not connected.</p></div><button id="shieldBtn" class="secondary">TRY DEMO · 10 ★</button></div></section>
+<section><h3>💫 Support Star Dash</h3><p class="note" style="text-align:left;margin:0">Ad and purchase slots are prepared for integration. This prototype does not show real ads or charge money. Connect an approved ad network and store billing before release.</p></section>
+<footer>Star Dash prototype · Progress is saved on this device · No real-money payouts</footer>
+</main>
+<script>
+(() => {
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+const $=id=>document.getElementById(id);
+const W=360,H=480;
+let running=false,score=0,stars=0,shield=1,frame=0,ship={x:180,y:405},rocks=[],pickups=[],particles=[],keys={};
+let best=Number(localStorage.getItem('stardash_best')||0);
+$('bestTop').textContent=best;
+function updateHud(){ $('score').textContent=Math.floor(score);$('stars').textContent=stars;$('shield').textContent=shield;$('bestTop').textContent=best; }
+function reset(){score=0;stars=0;shield=1;frame=0;ship={x:180,y:405};rocks=[];pickups=[];particles=[];updateHud();}
+function showOverlay(title,msg,button){$('overlayTitle').textContent=title;$('overlayText').textContent=msg;$('startBtn').textContent=button;$('overlay').classList.remove('hidden');}
+function start(){reset();running=true;$('overlay').classList.add('hidden');requestAnimationFrame(loop);}
+function end(){running=false;best=Math.max(best,Math.floor(score));localStorage.setItem('stardash_best',best);updateHud();showOverlay('MISSION OVER',`Score: ${Math.floor(score)} · Stars collected: ${stars}. Try again and beat your best!`,'PLAY AGAIN');}
+function spawn(){if(frame%Math.max(17,42-Math.floor(score/180))===0)rocks.push({x:18+Math.random()*324,y:-25,r:10+Math.random()*12,v:2+Math.random()*1.8+score/1300,rot:Math.random()*6});
+if(frame%58===0)pickups.push({x:22+Math.random()*316,y:-15,r:8,v:2.5+score/1600});}
+function burst(x,y,color){for(let i=0;i<9;i++)particles.push({x,y,vx:(Math.random()-.5)*4,vy:(Math.random()-.5)*4,life:22,color});}
+function move(dx,dy){if(!running)return;ship.x=Math.max(17,Math.min(W-17,ship.x+dx));ship.y=Math.max(30,Math.min(H-25,ship.y+dy));}
+function drawShip(){ctx.save();ctx.translate(ship.x,ship.y);ctx.shadowBlur=16;ctx.shadowColor='#6cf7ff';ctx.fillStyle='#6cf7ff';ctx.beginPath();ctx.moveTo(0,-17);ctx.lineTo(13,13);ctx.lineTo(0,7);ctx.lineTo(-13,13);ctx.closePath();ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(0,-3,4,0,Math.PI*2);ctx.fill();ctx.restore();}
+function drawBackground(){ctx.fillStyle='#070a20';ctx.fillRect(0,0,W,H);for(let i=0;i<70;i++){let x=(i*47)%W,y=(i*83+frame*(i%3+1)*.45)%H;ctx.fillStyle=i%7===0?'#6cf7ff':'#7483c5';ctx.globalAlpha=.3+(i%5)*.12;ctx.fillRect(x,y,i%7===0?2:1,i%7===0?2:1);}ctx.globalAlpha=1;}
+function loop(){if(!running)return;frame++;score+=.12;spawn();
+if(keys.ArrowLeft||keys.a)move(-3,0);if(keys.ArrowRight||keys.d)move(3,0);if(keys.ArrowUp||keys.w)move(0,-3);if(keys.ArrowDown||keys.s)move(0,3);
+drawBackground();
+for(let i=rocks.length-1;i>=0;i--){let r=rocks[i];r.y+=r.v;r.rot+=.025;ctx.save();ctx.translate(r.x,r.y);ctx.rotate(r.rot);ctx.fillStyle='#8a91b2';ctx.strokeStyle='#c2c8e7';ctx.lineWidth=1.5;ctx.beginPath();for(let j=0;j<8;j++){let a=j*Math.PI/4,rad=r.r*(j%2?.78:1);j?ctx.lineTo(Math.cos(a)*rad,Math.sin(a)*rad):ctx.moveTo(Math.cos(a)*rad,Math.sin(a)*rad);}ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
+if(Math.hypot(ship.x-r.x,ship.y-r.y)<r.r+10){rocks.splice(i,1);burst(ship.x,ship.y,'#ff5dca');if(shield>0){shield--;updateHud();}else{end();return;}}else if(r.y>H+30)rocks.splice(i,1);}
+for(let i=pickups.length-1;i>=0;i--){let p=pickups[i];p.y+=p.v;ctx.save();ctx.translate(p.x,p.y);ctx.rotate(frame*.035);ctx.shadowBlur=16;ctx.shadowColor='#ffd85a';ctx.fillStyle='#ffd85a';ctx.beginPath();for(let j=0;j<10;j++){let a=-Math.PI/2+j*Math.PI/5,rad=j%2?4:9;j?ctx.lineTo(Math.cos(a)*rad,Math.sin(a)*rad):ctx.moveTo(Math.cos(a)*rad,Math.sin(a)*rad);}ctx.closePath();ctx.fill();ctx.restore();if(Math.hypot(ship.x-p.x,ship.y-p.y)<19){stars++;score+=25;burst(p.x,p.y,'#ffd85a');pickups.splice(i,1);updateHud();}else if(p.y>H+20)pickups.splice(i,1);}
+for(let i=particles.length-1;i>=0;i--){let p=particles[i];p.x+=p.vx;p.y+=p.vy;p.life--;ctx.globalAlpha=Math.max(0,p.life/22);ctx.fillStyle=p.color;ctx.fillRect(p.x,p.y,3,3);ctx.globalAlpha=1;if(p.life<=0)particles.splice(i,1);}
+drawShip();if(frame%8===0)updateHud();requestAnimationFrame(loop);}
+$('startBtn').addEventListener('click',start);
+$('shieldBtn').addEventListener('click',()=>{if(stars>=10){stars-=10;shield++;updateHud();showOverlay('SHIELD READY','Demo shield added! Start a new run to use it.','START GAME');running=false;}else showOverlay('NOT ENOUGH STARS','Collect 10 stars in a run to try this demo upgrade. No payment is taken.','GOT IT');});
+function bindHold(id,dx,dy){const b=$(id);let timer=null;const act=()=>move(dx,dy);b.addEventListener('pointerdown',e=>{e.preventDefault();act();timer=setInterval(act,85);});for(const ev of ['pointerup','pointerleave','pointercancel'])b.addEventListener(ev,()=>{clearInterval(timer);timer=null;});}
+bindHold('leftBtn',-18,0);bindHold('rightBtn',18,0);bindHold('downBtn',0,16);
+window.addEventListener('keydown',e=>{keys[e.key]=true;if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key))e.preventDefault();if(!running&&e.key===' ')start();});
+window.addEventListener('keyup',e=>keys[e.key]=false);
+drawBackground();drawShip();
+})();
+</script>
+</body></html>
